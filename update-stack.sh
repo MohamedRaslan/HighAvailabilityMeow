@@ -1,1 +1,0 @@
-aws cloudformation update-stack --stack-name $1 --template-body file://CloudFormation/$2.yaml  --parameters file://CloudFormation/$2.json --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" --region=$3
