@@ -1,0 +1,18 @@
+[
+  {
+    "ParameterKey": "ProjectName",
+    "ParameterValue": "udacityInfraTest"
+  },
+  {
+    "ParameterKey": "EC2InstanceType",
+    "ParameterValue": "t2.large"
+  },
+  {
+    "ParameterKey": "BucketName",
+    "ParameterValue": "udacity-090403035262-bucket"
+  },
+  {
+    "ParameterKey": "SSHKeyPair",
+    "ParameterValue": "MechatroPrivate"
+  }
+]

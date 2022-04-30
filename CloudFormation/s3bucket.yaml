@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >
+   The template deploys an s3 bucket
+
+Parameters:
+
+    ProjectName:
+        Description: An environment name that will be prefixed to resource names
+        Type: String
+    BucketName:
+        Description: The name of the s3Bucket
+        Type: String
+
+
+Resources:
+  UdacityBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${BucketName}"
+      Tags:
+        - Key: "Application Name"
+          Value: !Sub ${ProjectName}-Website
+
+
+  BucketReadPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub "${ProjectName}-BucketReadOnlyPolicy"
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${UdacityBucket}/*"
+      Roles:
+        - !Ref BucketReadRole
+
+  BucketReadRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-BucketReadOnlyRole"
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+
+Outputs:
+
+    BucketRef:
+        Description: A reference to the created Bucket
+        Value: !Ref UdacityBucket
+        Export:
+          Name: !Sub ${ProjectName}-Bucket
+
+    BucketWebsiteURL:
+        Description: Website URL of the bucket
+        Value: !GetAtt UdacityBucket.WebsiteURL
+        Export:
+          Name: !Sub ${ProjectName}-Bucket-URL
+
+    BucketReadRoleRef:
+        Description: Ref of the S3 Bucket Read Role
+        Value: !Ref BucketReadRole
+        Export:
+          Name: !Sub ${ProjectName}-Bucket-ReadRole
+

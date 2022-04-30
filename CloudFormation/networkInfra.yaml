@@ -1,0 +1,266 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >
+    The template deploys a VPC, with a pair of public and private subnets spread
+    across two availability zones. It deploys an Internet Gateway, with a default
+    route on the public subnets. It deploys a pair of NAT Gateways (one in each AZ),
+    and default routes for them in the private subnets.
+
+
+Parameters:
+
+    ProjectName:
+        Description: An environment name that will be prefixed to resource names
+        Type: String
+
+    VpcCIDR:
+        Description: Please enter the IP range (CIDR notation) for this VPC
+        Type: String
+        Default: 10.0.0.0/16
+    PublicSubnet1CIDR:
+        Description: Please enter the IP range (CIDR notation) for the public subnet in the first Availability Zone
+        Type: String
+        Default: 10.0.0.0/24
+
+    PublicSubnet2CIDR:
+        Description: Please enter the IP range (CIDR notation) for the public subnet in the second Availability Zone
+        Type: String
+        Default: 10.0.1.0/24
+
+    PrivateSubnet1CIDR:
+        Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+        Type: String
+        Default: 10.0.2.0/24
+
+    PrivateSubnet2CIDR:
+        Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
+        Type: String
+        Default: 10.0.3.0/24
+
+
+Resources:
+    udacityVPC:
+        Type: AWS::EC2::VPC
+        Properties:
+            CidrBlock: !Ref VpcCIDR
+            EnableDnsHostnames: true
+            Tags:
+                - Key: Name
+                  Value: !Ref ProjectName
+
+    udacityInternetGateway:
+        Type: AWS::EC2::InternetGateway
+        Properties:
+            Tags:
+                - Key: Name
+                  Value: !Ref ProjectName
+
+    udacityInternetGatewayAttachment:
+        Type: AWS::EC2::VPCGatewayAttachment
+        Properties:
+            InternetGatewayId: !Ref udacityInternetGateway
+            VpcId: !Ref udacityVPC
+
+    udacityPublicSubnet1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref udacityVPC
+            AvailabilityZone: !Select [ 0, !GetAZs '' ]
+            CidrBlock: !Ref PublicSubnet1CIDR
+            MapPublicIpOnLaunch: true
+            Tags:
+                - Key: Name
+                  Value: !Sub ${ProjectName} Public Subnet (AZ1)
+
+    udacityPublicSubnet2:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref udacityVPC
+            AvailabilityZone: !Select [ 1, !GetAZs '' ]
+            CidrBlock: !Ref PublicSubnet2CIDR
+            MapPublicIpOnLaunch: true
+            Tags:
+                - Key: Name
+                  Value: !Sub ${ProjectName} Public Subnet (AZ2)
+
+    udacityPrivateSubnet1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref udacityVPC
+            AvailabilityZone: !Select [ 0, !GetAZs '' ]
+            CidrBlock: !Ref PrivateSubnet1CIDR
+            MapPublicIpOnLaunch: false
+            Tags:
+                - Key: Name
+                  Value: !Sub ${ProjectName} Private Subnet (AZ1)
+
+    udacityPrivateSubnet2:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref udacityVPC
+            AvailabilityZone: !Select [ 1, !GetAZs '' ]
+            CidrBlock: !Ref PrivateSubnet2CIDR
+            MapPublicIpOnLaunch: false
+            Tags:
+                - Key: Name
+                  Value: !Sub ${ProjectName} Private Subnet (AZ2)
+
+    udacityNatGateway1EIP:
+        Type: AWS::EC2::EIP
+        DependsOn: udacityInternetGatewayAttachment
+        Properties:
+            Domain: vpc
+
+    udacityNatGateway2EIP:
+        Type: AWS::EC2::EIP
+        DependsOn: udacityInternetGatewayAttachment
+        Properties:
+            Domain: vpc
+
+    udacityNatGateway1:
+        Type: AWS::EC2::NatGateway
+        Properties:
+            AllocationId: !GetAtt udacityNatGateway1EIP.AllocationId
+            SubnetId: !Ref udacityPublicSubnet1
+
+    udacityNatGateway2:
+        Type: AWS::EC2::NatGateway
+        Properties:
+            AllocationId: !GetAtt udacityNatGateway2EIP.AllocationId
+            SubnetId: !Ref udacityPublicSubnet2
+
+
+    udacityPublicRouteTable:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref udacityVPC
+            Tags:
+                - Key: Name
+                  Value: !Sub ${ProjectName} Public Routes
+
+    udacityDefaultPublicRoute:
+        Type: AWS::EC2::Route
+        DependsOn: udacityInternetGatewayAttachment
+        Properties:
+            RouteTableId: !Ref udacityPublicRouteTable
+            DestinationCidrBlock: 0.0.0.0/0
+            GatewayId: !Ref udacityInternetGateway
+
+    udacityPublicSubnet1RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref udacityPublicRouteTable
+            SubnetId: !Ref udacityPublicSubnet1
+
+    udacityPublicSubnet2RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref udacityPublicRouteTable
+            SubnetId: !Ref udacityPublicSubnet2
+
+
+    udacityPrivateRouteTable1:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref udacityVPC
+            Tags:
+                - Key: Name
+                  Value: !Sub ${ProjectName} Private Routes (AZ1)
+
+    udacityDefaultPrivateRoute1:
+        Type: AWS::EC2::Route
+        Properties:
+            RouteTableId: !Ref udacityPrivateRouteTable1
+            DestinationCidrBlock: 0.0.0.0/0
+            NatGatewayId: !Ref udacityNatGateway1
+
+    udacityPrivateSubnet1RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref udacityPrivateRouteTable1
+            SubnetId: !Ref udacityPrivateSubnet1
+
+    udacityPrivateRouteTable2:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref udacityVPC
+            Tags:
+                - Key: Name
+                  Value: !Sub ${ProjectName} Private Routes (AZ2)
+
+    udacityDefaultPrivateRoute2:
+        Type: AWS::EC2::Route
+        Properties:
+            RouteTableId: !Ref udacityPrivateRouteTable2
+            DestinationCidrBlock: 0.0.0.0/0
+            NatGatewayId: !Ref udacityNatGateway2
+
+    udacityPrivateSubnet2RouteTableAssociation:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+          RouteTableId: !Ref udacityPrivateRouteTable2
+          SubnetId: !Ref udacityPrivateSubnet2
+
+
+Outputs:
+
+    VPC:
+        Description: A reference to the created VPC
+        Value: !Ref udacityVPC
+        Export:
+          Name: !Sub ${ProjectName}-VPCID
+
+    VPCPublicRouteTable:
+        Description: Public Routing
+        Value: !Ref udacityPublicRouteTable
+        Export:
+          Name: !Sub ${ProjectName}-PUB-RT
+
+    VPCPrivateRouteTable1:
+        Description: Private Routing AZ1
+        Value: !Ref udacityPrivateRouteTable1
+        Export:
+          Name: !Sub ${ProjectName}-PRI1-RT
+
+    VPCPrivateRouteTable2:
+        Description: Private Routing AZ2
+        Value: !Ref udacityPrivateRouteTable2
+        Export:
+          Name: !Sub ${ProjectName}-PRI2-RT
+
+    PublicSubnets:
+        Description: A list of the public subnets
+        Value: !Join [ ",", [ !Ref udacityPublicSubnet1, !Ref udacityPublicSubnet2 ]]
+        Export:
+          Name: !Sub ${ProjectName}-PUB-NETS
+
+    PrivateSubnets:
+        Description: A list of the private subnets
+        Value: !Join [ ",", [ !Ref udacityPrivateSubnet1, !Ref udacityPrivateSubnet2 ]]
+        Export:
+          Name: !Sub ${ProjectName}-PRIV-NETS
+
+    PublicSubnet1:
+        Description: A reference to the public subnet in the 1st Availability Zone
+        Value: !Ref udacityPublicSubnet1
+        Export:
+          Name: !Sub ${ProjectName}-PUB1-SN
+
+    PublicSubnet2:
+        Description: A reference to the public subnet in the 2nd Availability Zone
+        Value: !Ref udacityPublicSubnet2
+        Export:
+          Name: !Sub ${ProjectName}-PUB2-SN
+
+    PrivateSubnet1:
+        Description: A reference to the private subnet in the 1st Availability Zone
+        Value: !Ref udacityPrivateSubnet1
+        Export:
+          Name: !Sub ${ProjectName}-PRI1-SN
+
+    PrivateSubnet2:
+        Description: A reference to the private subnet in the 2nd Availability Zone
+        Value: !Ref udacityPrivateSubnet2
+        Export:
+          Name: !Sub ${ProjectName}-PRI2-SN
+

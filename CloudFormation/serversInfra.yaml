@@ -1,0 +1,231 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >
+   The template deploys the four servers needed in two private subnets in two different AZs,
+   with a load balancer, the required security group and the required launch template.
+
+Mappings:
+  AMIsRegionMap: #AMIs (Ubuntu Server 18.04 LTS , 64-bit (x86) ) for some common regions
+    us-east-1:
+      AMI: ami-0e472ba40eb589f49
+    us-east-2:
+      AMI: ami-03a0c45ebc70f98ea
+    us-west-1:
+      AMI: ami-009726b835c24a3aa
+    us-west-2:
+      AMI: ami-074251216af698218
+
+
+Parameters:
+
+    ProjectName:
+        Description: An environment name that will be prefixed to resource names
+        Type: String
+
+    EC2InstanceType:
+      Description: The type of the EC2 instance to be used in the auto scaling group
+      Type: String
+      Default: t2.medium
+
+    BucketName:
+        Description: The name of the s3Bucket
+        Type: String
+
+    SSHKeyPair:
+        Description: The key pair to be associated with the instance
+        Type: String
+
+
+Resources:
+  LoadBalancerSecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to our load balancer
+      VpcId:
+        Fn::ImportValue:
+          !Sub "${ProjectName}-VPCID"
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+
+  InstancesSecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to our hosts and SSH from local only (For Testing)
+      VpcId:
+        Fn::ImportValue:
+          !Sub "${ProjectName}-VPCID"
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp # to be used to ssh into the instances, it should be removed after testing
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 0
+        ToPort: 65535
+        CidrIp: 0.0.0.0/0
+
+  BucketIamInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub "${ProjectName}-IamInstanceProfile"
+      Path: "/"
+      Roles:
+      - Fn::ImportValue:
+          !Sub ${ProjectName}-Bucket-ReadRole
+
+  InstancesLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            sudo apt-get update -y
+            sudo apt-get install unzip awscli apache2 -y
+            cd /var/www/html
+            aws s3 cp s3://${BucketName}/MeowWebsite.zip .
+            unzip -o MeowWebsite.zip
+            rm MeowWebsite.zip
+            systemctl start apache2.service
+        ImageId: !FindInMap [AMIsRegionMap, !Ref 'AWS::Region', AMI]
+        KeyName: !Ref 'SSHKeyPair' # to be used to ssh into the instance, it can be removed after testing
+        IamInstanceProfile:
+          Arn: !GetAtt BucketIamInstanceProfile.Arn
+        SecurityGroupIds:
+        - Ref: InstancesSecGroup
+        InstanceType: !Sub ${EC2InstanceType}
+        BlockDeviceMappings:
+        - DeviceName: "/dev/sdk"
+          Ebs:
+            VolumeSize: '10'
+
+  LoadBalancerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 8
+      HealthyThresholdCount: 2
+      Port: 80
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: slow_start.duration_seconds
+          Value: "40"
+      UnhealthyThresholdCount: 5
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: "${ProjectName}-VPCID"
+
+  WebAppAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+      - Fn::ImportValue:
+          !Sub "${ProjectName}-PRIV-NETS"
+      LaunchTemplate:
+        LaunchTemplateId: !Ref InstancesLaunchTemplate
+        Version: !GetAtt InstancesLaunchTemplate.LatestVersionNumber
+      MinSize: '2'
+      MaxSize: '4' # Mentioned that the app needs to have 4 servers but not at least 4, so I think 4 is the maximum needed and 2 is the minimum
+      TargetGroupARNs:
+      - Ref: LoadBalancerTargetGroup
+
+  WebAppLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets:
+      - Fn::ImportValue: !Sub "${ProjectName}-PUB1-SN"
+      - Fn::ImportValue: !Sub "${ProjectName}-PUB2-SN"
+      SecurityGroups:
+      - Ref: LoadBalancerSecGroup
+
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn:
+          Ref: LoadBalancerTargetGroup
+      LoadBalancerArn:
+        Ref: WebAppLoadBalancer
+      Port: '80'
+      Protocol: HTTP
+
+  LoadBalancerListenerRule:
+      Type: AWS::ElasticLoadBalancingV2::ListenerRule
+      Properties:
+        Actions:
+        - Type: forward
+          TargetGroupArn: !Ref LoadBalancerTargetGroup
+        Conditions:
+        - Field: path-pattern
+          Values: [/]
+        ListenerArn: !Ref 'Listener'
+        Priority: 1
+
+
+  JumpBoxSecGroup: # to be used to ssh into the instances, it should be removed after testing
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription:  Enable SSH access via port 22 (For Testing)
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: "${ProjectName}-VPCID"
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+
+  JumpBox: # to be used to ssh into the instances, it should be removed after testing
+    Type: AWS::EC2::Instance
+    Properties:
+      KeyName: !Ref 'SSHKeyPair'
+      ImageId: !FindInMap [AMIsRegionMap, !Ref 'AWS::Region', AMI]
+      InstanceType: t2.micro
+      NetworkInterfaces:
+      - AssociatePublicIpAddress: true
+        DeleteOnTermination: true
+        Description: JumpBox to log into private instances
+        DeviceIndex: '0'
+        SubnetId:
+          Fn::ImportValue: !Sub "${ProjectName}-PUB1-SN"
+        GroupSet:
+        - !Ref 'JumpBoxSecGroup'
+      Tags:
+      - Key: Name
+        Value: !Sub '${ProjectName} Jump box'
+
+
+Outputs:
+
+    LoadBalancerURL:
+      Description: The url to access the website WebAppLoadBalancer
+      Value:  !Sub
+      - 'http://${Domain}'
+      - Domain: !GetAtt WebAppLoadBalancer.DNSName
+      Export:
+        Name: !Sub ${ProjectName}-LB-URL
+
+    JumpBoxRef:
+      Description: Linux bastion instance
+      Value: !Ref 'JumpBox'
+

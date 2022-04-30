@@ -1,0 +1,10 @@
+[
+  {
+    "ParameterKey": "ProjectName",
+    "ParameterValue": "udacityInfraTest"
+  },
+  {
+    "ParameterKey": "SSHKeyPair",
+    "ParameterValue": "MechatroPrivate"
+  }
+]
