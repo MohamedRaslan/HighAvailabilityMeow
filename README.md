@@ -6,7 +6,7 @@ A high-availability web app using Cloud Formation
 
 ## Architecture Diagram
 
-[![High Availability Web App Using Cloud Formation](.github/docs/HighAvailabilityWebAppUsingCloudFormation.png)](.github/docs/HighAvailabilityWebAppUsingCloudFormation.png 'HighAvailabilityWebAppUsingCloudFormation')
+[![High Availability Web App Using Cloud Formation](docs/HighAvailabilityWebAppUsingCloudFormation.png)](docs/HighAvailabilityWebAppUsingCloudFormation.png 'HighAvailabilityWebAppUsingCloudFormation')
 
 ## Content
 
@@ -21,24 +21,25 @@ In the repo you will find the following:
 
 ## Deployment Process
 
-- Deploy the network infrastructure by running the following command **`deploy-stack.sh create udacityDemo-network networkInfra us-east-1`**
-- After the network infrastructure finishes, we need to deploy the s3bucket first by running this command **`deploy-stack.sh create udacityDemo-bucket s3bucket us-east-1`**
-- After it finishes we can deploy the servers by rerunning the following command **`deploy-stack.sh create udacityDemo-servers serversInfra us-east-1`**
+- Deploy the network infrastructure by running the following command **`./deploy-stack.sh create udacityDemo-network networkInfra us-east-1`**
+- After the network infrastructure finishes, we need to deploy the s3bucket first by running this command **`./deploy-stack.sh create udacityDemo-bucket s3bucket us-east-1`**, but first you may need to change the bucket name from the **`s3bucket.json`** parameters file.
+- Upload the **`MeowWebsite.zip`** file in the **`./docs`** to the created bucket, you can use this command **`aws s3 cp ./docs/MeowWebsite.zip s3://${BucketName}/`** for example in my case it will be **`aws s3 cp ./docs/MeowWebsite.zip s3://udacity-090403035262-bucket/`**
+- After it finishes we can deploy the servers by rerunning the following command **`./deploy-stack.sh create udacityDemo-servers serversInfra us-east-1`**
 
 - After it finishes you can open up the website url "you can find the link in the output of the udacityDemo-servers stack "
 
 ## Website URL
 
-**[Meow Website](https://yarnpkg.com/)**
+**[Meow Website](http://udaci-webap-1bk4moxtog9wf-1425865623.us-east-1.elb.amazonaws.com/)**
 
-> **_NOTE:_** The website URL will not be available after the submission.
+> **_NOTE:_** The website url will not be available after the submission.
 
 
 ## Notes & Considerations
 
 - You can use the **`deploy-stack.sh`** script also to update or delete stacks as following:
-    - To **`update`** write **`update`** instead of **`create`** for example **`deploy-stack.sh update udacityDemo-network networkInfra us-east-1`**
-    - To **`update`** write **`delete`** instead of **`create`** with only the stack name for example **`deploy-stack.sh delete udacityDemo-network`**
+    - To **`update`** write **`update`** instead of **`create`** for example **`./deploy-stack.sh update udacityDemo-network networkInfra us-east-1`**
+    - To **`update`** write **`delete`** instead of **`create`** with only the stack name for example **`./deploy-stack.sh delete udacityDemo-network`**
 
 - In the **`serversInfra.yaml`** file :
     - The **`JumpBox`** resource with its **`JumpBoxSecGroup`** resource are used for testing only and should be removed from the stack after that.
