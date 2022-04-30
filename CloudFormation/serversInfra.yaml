@@ -31,10 +31,6 @@ Parameters:
         Description: The name of the s3Bucket
         Type: String
 
-    SSHKeyPair:
-        Description: The key pair to be associated with the instance
-        Type: String
-
 
 Resources:
   LoadBalancerSecGroup:
@@ -101,7 +97,6 @@ Resources:
             rm MeowWebsite.zip
             systemctl start apache2.service
         ImageId: !FindInMap [AMIsRegionMap, !Ref 'AWS::Region', AMI]
-        KeyName: !Ref 'SSHKeyPair' # to be used to ssh into the instance, it can be removed after testing
         IamInstanceProfile:
           Arn: !GetAtt BucketIamInstanceProfile.Arn
         SecurityGroupIds:
@@ -198,7 +193,6 @@ Resources:
   JumpBox: # to be used to ssh into the instances, it should be removed after testing
     Type: AWS::EC2::Instance
     Properties:
-      KeyName: !Ref 'SSHKeyPair'
       ImageId: !FindInMap [AMIsRegionMap, !Ref 'AWS::Region', AMI]
       InstanceType: t2.micro
       NetworkInterfaces:
