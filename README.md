@@ -28,13 +28,6 @@ In the repo you will find the following:
 
 - After it finishes you can open up the website url "you can find the link in the output of the udacityDemo-servers stack "
 
-## Website URL
-
-**[Meow Website](http://udaci-webap-1bk4moxtog9wf-1425865623.us-east-1.elb.amazonaws.com/)**
-
-> **_NOTE:_** The website url will not be available after the submission.
-
-
 ## Notes & Considerations
 
 - You can use the **`deploy-stack.sh`** script also to update or delete stacks as following:
